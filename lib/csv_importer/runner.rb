@@ -42,36 +42,34 @@ module CSVImporter
     end
 
     def persist_rows!
-      transaction do
-        rows.each do |row|
-          tags = []
+      rows.each do |row|
+        tags = []
 
-          if row.model.persisted?
-            tags << :update
+        if row.model.persisted?
+          tags << :update
+        else
+          tags << :create
+        end
+
+        if row.skip?
+          tags << :skip
+        else
+          if row.model.save
+            tags << :success
           else
-            tags << :create
+            tags << :failure
           end
+        end
 
-          if row.skip?
-            tags << :skip
+        add_to_report(row, tags)
+
+        after_save_blocks.each do |block|
+          case block.arity
+          when 0 then block.call
+          when 1 then block.call(row.model)
+          when 2 then block.call(row.model, row.csv_attributes)
           else
-            if row.model.save
-              tags << :success
-            else
-              tags << :failure
-            end
-          end
-
-          add_to_report(row, tags)
-
-          after_save_blocks.each do |block|
-            case block.arity
-            when 0 then block.call
-            when 1 then block.call(row.model)
-            when 2 then block.call(row.model, row.csv_attributes)
-            else
-              raise ArgumentError, "after_save block of arity #{ block.arity } is not supported"
-            end
+            raise ArgumentError, "after_save block of arity #{ block.arity } is not supported"
           end
         end
       end
